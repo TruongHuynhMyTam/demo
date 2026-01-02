@@ -11,6 +11,8 @@ import { Layout } from "./pages/hotelOwner/Layout";
 import { Dashboard } from "./pages/hotelOwner/Dashboard";
 import { AddRoom } from "./pages/hotelOwner/AddRoom";
 import { ListRoom } from "./pages/hotelOwner/ListRoom";
+import { AddHotel } from "./pages/hotelOwner/AddHotel";
+import { ListHotel } from "./pages/hotelOwner/ListHotel";
 import RoleSelector from "./components/RoleSelector";
 
 const App = () => {
@@ -26,8 +28,11 @@ const App = () => {
           <Route path="/rooms/:id" element={<RoomDetails />} />
           <Route path="/room/:id" element={<RoomDetails />} />
           <Route path="/my-bookings" element={<MyBookings />} />
-          <Route path="/dashboard" element={<Layout />} >
+              
+          <Route path="/owner" element={<Layout />} >
               <Route index element={<Dashboard />} />
+              <Route path="add-hotel" element={<AddHotel />} />
+              <Route path="list-hotel" element={<ListHotel />} />
               <Route path="add-room" element={<AddRoom />} />
               <Route path="list-room" element={<ListRoom />} />
           </Route>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { assets } from "../../assets/assets";
 import Title from "../../components/Title";
-import { addRoom, uploadMultipleImages, getHotelsByOwner } from "../../services/api";
+import { addRoom, uploadMultipleImages, getHotelsByOwner, supabase } from "../../services/api";
 import { useSupabaseUser } from "../../utils/auth-clerk.jsx";
 
 export const AddRoom = () => {
@@ -18,6 +18,8 @@ export const AddRoom = () => {
     hotelId: "",
     roomType: "",
     pricePerNight: 0,
+    maxGuests: 2,
+    description: "",
     amenities: {
       "Free WiFi": false,
       "Free Breakfast": false,
@@ -39,17 +41,14 @@ export const AddRoom = () => {
       try {
         const result = await getHotelsByOwner(user.id);
         
-        if (result.success) {
+        if (result.success && result.data.length > 0) {
           setHotels(result.data);
-          // Auto-select first hotel if only one exists
-          if (result.data.length === 1) {
-            setInputs(prev => ({ ...prev, hotelId: result.data[0].id }));
-          }
-        } else {
-          setError('Failed to load hotels: ' + result.error);
+          // Auto-select first hotel
+          setInputs(prev => ({ ...prev, hotelId: result.data[0].id }));
         }
+        // If no hotels, that's OK - we'll create one when adding first room
       } catch (err) {
-        setError('Failed to load hotels: ' + err.message);
+        console.error('Error fetching hotels:', err);
       }
     };
 
@@ -65,7 +64,7 @@ export const AddRoom = () => {
     }
 
     if (!inputs.hotelId) {
-      alert('Please select a hotel');
+      alert('Please create a hotel first or select an existing hotel');
       return;
     }
 
@@ -78,17 +77,43 @@ export const AddRoom = () => {
     setError(null);
 
     try {
+      const hotelId = inputs.hotelId;
       // Upload images if any are selected
       let imageUrls = [];
       const imageFiles = Object.values(images).filter(img => img !== null);
       
       if (imageFiles.length > 0) {
-        const uploadResult = await uploadMultipleImages(imageFiles, 'room-images');
-        
-        if (uploadResult.success) {
-          imageUrls = uploadResult.data.map(item => item.url);
-        } else {
-          throw new Error('Failed to upload images: ' + uploadResult.error);
+        try {
+          console.log('Starting upload for', imageFiles.length, 'images...');
+          const uploadResult = await uploadMultipleImages(imageFiles, 'room-images');
+          
+          if (uploadResult.success) {
+            imageUrls = uploadResult.data.map(item => item.url);
+            console.log('✅ Images uploaded successfully:', imageUrls);
+          } else {
+            console.error('❌ Upload failed:', uploadResult.error);
+            
+            // Show detailed error to user
+            const errorMessage = uploadResult.error.includes('bucket') 
+              ? 'Storage bucket "room-images" not found. Please create it in Supabase Dashboard.\n\nSteps:\n1. Go to Storage\n2. Create bucket "room-images"\n3. Make it Public\n4. Add upload policy for authenticated users'
+              : `Upload error: ${uploadResult.error}\n\nCheck Console (F12) for details.`;
+            
+            alert(errorMessage);
+          }
+        } catch (uploadError) {
+          console.error('❌ Image upload exception:', uploadError);
+          alert('Upload failed: ' + uploadError.message);
+        }
+      }
+
+      console.log('Room data before saving:', { imageUrls, roomType: inputs.roomType });
+
+      // Check if image upload was successful
+      if (imageFiles.length > 0 && imageUrls.length === 0) {
+        const continueWithout = confirm('Image upload failed. Do you want to continue adding the room without images?');
+        if (!continueWithout) {
+          setLoading(false);
+          return;
         }
       }
 
@@ -99,12 +124,16 @@ export const AddRoom = () => {
 
       // Create room
       const roomData = {
-        hotelId: inputs.hotelId,
+        hotelId: hotelId,
         roomType: inputs.roomType,
         pricePerNight: parseFloat(inputs.pricePerNight),
+        maxGuests: parseInt(inputs.maxGuests),
+        description: inputs.description,
         amenities: selectedAmenities,
-        images: imageUrls
+        images: imageUrls.length > 0 ? imageUrls : null
       };
+
+      console.log('Saving room with data:', roomData);
 
       const result = await addRoom(roomData);
       
@@ -113,9 +142,12 @@ export const AddRoom = () => {
         // Reset form
         setImages({ 1: null, 2: null, 3: null, 4: null });
         setInputs({
-          hotelId: hotels.length === 1 ? hotels[0].id : "",
+          hotelId: hotels.length > 0 ? hotels[0].id : "",
           roomType: "",
           pricePerNight: 0,
+          maxGuests: 2,
+          address: "",
+          description: "",
           amenities: {
             "Free WiFi": false,
             "Free Breakfast": false,
@@ -139,6 +171,21 @@ export const AddRoom = () => {
       <div className="text-center py-10">
         <h2 className="text-2xl font-bold text-gray-800 mb-4">Please Sign In</h2>
         <p className="text-gray-600">You need to be signed in to add rooms.</p>
+      </div>
+    );
+  }
+
+  if (hotels.length === 0 && !loading) {
+    return (
+      <div className="text-center py-10">
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">No Hotels Found</h2>
+        <p className="text-gray-600 mb-6">Please create a hotel first before adding rooms.</p>
+        <a 
+          href="/owner/add-hotel" 
+          className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Add Hotel
+        </a>
       </div>
     );
   }
@@ -185,31 +232,34 @@ export const AddRoom = () => {
         </div>
       )}
 
-      <div className="w-full flex max-sm:flex-col sm:gap-4 mt-4">
-        {/* Hotel Selection */}
-        <div className="flex-1 max-w-48">
-          <p className="text-gray-800 mt-4">Hotel *</p>
-          <select
-            value={inputs.hotelId}
-            onChange={(e) => setInputs({ ...inputs, hotelId: e.target.value })}
-            className="border opacity-70 border-gray-300 mt-1 rounded p-2 w-full"
-            required
-          >
-            <option value="">Select Hotel</option>
-            {hotels.map((hotel) => (
-              <option key={hotel.id} value={hotel.id}>
-                {hotel.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Hotel Selection */}
+      <div className="mt-6">
+        <p className="text-gray-800 mb-2">Select Hotel *</p>
+        <select
+          value={inputs.hotelId}
+          onChange={(e) => setInputs({ ...inputs, hotelId: e.target.value })}
+          className="border border-gray-300 rounded p-2 w-full max-w-lg bg-white"
+          required
+        >
+          <option value="">Choose a hotel</option>
+          {hotels.map((hotel) => (
+            <option key={hotel.id} value={hotel.id}>
+              {hotel.name} - {hotel.city}
+            </option>
+          ))}
+        </select>
+        <p className="text-sm text-gray-500 mt-1">
+          Don't see your hotel? <a href="/owner/add-hotel" className="text-blue-600 hover:underline">Add a new hotel</a>
+        </p>
+      </div>
 
+      <div className="w-full flex max-sm:flex-col sm:gap-4 mt-4">
         <div className="flex-1 max-w-48">
           <p className="text-gray-800 mt-4">Room Type *</p>
           <select
             value={inputs.roomType}
             onChange={(e) => setInputs({ ...inputs, roomType: e.target.value })}
-            className="border opacity-70 border-gray-300 mt-1 rounded p-2 w-full"
+            className="border border-gray-300 mt-1 rounded p-2 w-full bg-white"
             required
           >
             <option value="">Select Room Type</option>
@@ -235,11 +285,39 @@ export const AddRoom = () => {
             required
           />
         </div>
+        <div>
+          <p className="mt-4 text-gray-800">Max Guests *</p>
+          <input
+            type="number"
+            placeholder="2"
+            min="1"
+            max="10"
+            className="border border-gray-300 mt-1 rounded p-2 w-24"
+            value={inputs.maxGuests}
+            onChange={(e) =>
+              setInputs({ ...inputs, maxGuests: e.target.value })
+            }
+            required
+          />
+        </div>
+      </div>
+      
+      <div>
+        <p className="text-gray-800 mt-4">Description</p>
+        <textarea
+          placeholder="Enter room description..."
+          className="border border-gray-300 mt-1 rounded p-2 w-full max-w-lg"
+          rows="3"
+          value={inputs.description}
+          onChange={(e) =>
+            setInputs({ ...inputs, description: e.target.value })
+          }
+        />
       </div>
       <p className="text-gray-800 mt-4">Amenities</p>
       <div className="flex flex-col flex-wrap mt-1 text-gray-400 max-w-sm">
         {Object.keys(inputs.amenities).map((amenity, index) => (
-          <div key={index}>
+          <div key={index} className="mb-2">
             <input
               type="checkbox"
               id={`amenities${index + 1}`}
@@ -253,19 +331,21 @@ export const AddRoom = () => {
                   },
                 })
               }
+              className="mr-2"
             />
-            <label htmlFor={`amenities${index + 1}`}>{amenity}</label>
+            <label htmlFor={`amenities${index + 1}`} className="cursor-pointer">{amenity}</label>
           </div>
         ))}
       </div>
+      
       <button 
         type="submit"
         disabled={loading}
         className={`${
           loading 
             ? 'bg-gray-400 cursor-not-allowed' 
-            : 'bg-primary hover:bg-primary-dull'
-        } text-white px-8 py-2 rounded mt-8 cursor-pointer transition-colors`}
+            : 'bg-blue-600 hover:bg-blue-700'
+        } text-white px-8 py-3 rounded-lg mt-8 font-medium transition-colors`}
       >
         {loading ? 'Adding Room...' : 'Add Room'}
       </button>

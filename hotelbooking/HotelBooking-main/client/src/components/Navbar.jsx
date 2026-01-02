@@ -42,13 +42,39 @@ const Navbar = () => {
   const { user: supabaseUser } = useSupabaseUser();
 
   const handleBecomeOwner = async () => {
-    if (user && supabaseUser) {
+    if (!user) {
+      console.error('❌ No user found');
+      alert('Please sign in first');
+      return;
+    }
+
+    try {
+      console.log('=== BECOME OWNER START ===');
+      console.log('User ID:', user.id);
+      console.log('Calling promoteToHotelOwner...');
+      
       const result = await promoteToHotelOwner(user.id);
+      
+      console.log('Result:', result);
+      
       if (result.success) {
-        alert('You are now a hotel owner! The page will refresh.');
+        console.log('✅ Role updated successfully!');
+        console.log('Updated user data:', result.data);
+        console.log('Redirecting to /owner in 1.5 seconds...');
+        alert('🎉 You are now a hotel owner! Redirecting to dashboard...');
+        
+        setTimeout(() => {
+          console.log('Executing redirect to /owner');
+          window.location.href = '/owner';
+        }, 1500);
       } else {
-        alert('Failed to become hotel owner: ' + result.error);
+        console.error('❌ Failed to update role');
+        console.error('Error:', result.error);
+        alert('❌ Failed to become hotel owner: ' + result.error);
       }
+    } catch (error) {
+      console.error('❌ Exception in handleBecomeOwner:', error);
+      alert('❌ Error: ' + error.message);
     }
   };
 
@@ -168,12 +194,12 @@ const Navbar = () => {
           ))}
           {user && supabaseUser && (
             <>
-              {canAccessOwnerFeatures(supabaseUser.role) ? (
+              {canAccessOwnerFeatures(supabaseUser) ? (
                 <button
                   className={`px-6 py-2 text-sm font-medium rounded-full cursor-pointer transition-all ${
                     isScrolled ? "bg-gray-50 text-gray-600 border border-black hover:bg-gray-100" : "bg-white/20 text-white border border-white/30 hover:bg-white/30"
                   }`} 
-                  onClick={() => navigate('/dashboard')}
+                  onClick={() => navigate('/owner')}
                 >
                   Dashboard
                 </button>
@@ -281,11 +307,11 @@ const Navbar = () => {
 
           {user && supabaseUser && (
             <>
-              {canAccessOwnerFeatures(supabaseUser.role) ? (
+              {canAccessOwnerFeatures(supabaseUser) ? (
                 <button 
                   className="border border-gray-300 px-6 py-2 text-sm font-medium rounded-full cursor-pointer transition-all hover:bg-gray-100" 
                   onClick={() => {
-                    navigate('/dashboard');
+                    navigate('/owner');
                     setIsMenuOpen(false);
                   }}
                 >

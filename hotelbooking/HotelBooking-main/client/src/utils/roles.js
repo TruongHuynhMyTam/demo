@@ -4,15 +4,25 @@ import { supabase } from '../services/api.js'
 // Update user role in Supabase
 export const updateUserRole = async (userId, role) => {
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .update({ role: role })
-      .eq('id', userId) // Use 'id' instead of 'clerk_user_id'
-      .select()
-      .single()
+    // Call the API endpoint instead of directly updating Supabase
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/user/update-role`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        userId: userId,
+        role: role 
+      })
+    });
+
+    const result = await response.json();
     
-    if (error) throw error
-    return { success: true, data }
+    if (!result.success) {
+      throw new Error(result.message);
+    }
+    
+    return { success: true, data: result.data }
   } catch (error) {
     console.error('Error updating user role:', error)
     return { success: false, error: error.message }
@@ -51,8 +61,7 @@ export const promoteToHotelOwner = async (clerkUserId) => {
     const result = await updateUserRole(clerkUserId, USER_ROLES.OWNER)
     if (result.success) {
       console.log('User promoted to hotel owner successfully')
-      // Reload the page to update the user context
-      window.location.reload()
+      // Don't reload - let the caller handle navigation
     }
     return result
   } catch (error) {

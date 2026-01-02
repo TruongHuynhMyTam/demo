@@ -193,7 +193,16 @@ export const getRoomsByHotel = async (hotelId) => {
   try {
     const { data, error } = await supabase
       .from('rooms')
-      .select('*')
+      .select(`
+        *,
+        hotels (
+          id,
+          name,
+          address,
+          city,
+          country
+        )
+      `)
       .eq('hotel_id', hotelId)
     
     if (error) throw error
@@ -206,20 +215,33 @@ export const getRoomsByHotel = async (hotelId) => {
 
 export const addRoom = async (roomData) => {
   try {
+    const imageUrl = roomData.images && roomData.images.length > 0 ? roomData.images[0] : null;
+    
+    console.log('Adding room to database:', {
+      roomType: roomData.roomType,
+      imageUrl: imageUrl,
+      hasImages: !!imageUrl
+    });
+
     const { data, error } = await supabase
       .from('rooms')
       .insert({
         hotel_id: roomData.hotelId,
-        room_type: roomData.roomType,
-        price_per_night: roomData.pricePerNight,
-        amenities: roomData.amenities,
-        images: roomData.images || [],
+        name: roomData.roomType || 'Standard Room',
+        description: roomData.description || '',
+        type: roomData.roomType,
+        price: roomData.pricePerNight,
+        max_guests: roomData.maxGuests || 2,
+        image: imageUrl,
+        amenities: roomData.amenities || [],
         is_available: true
       })
       .select()
       .single()
     
     if (error) throw error
+    
+    console.log('Room created successfully:', data);
     return { success: true, data }
   } catch (error) {
     console.error('Error adding room:', error)
@@ -240,6 +262,45 @@ export const updateRoomAvailability = async (roomId, isAvailable) => {
     return { success: true, data }
   } catch (error) {
     console.error('Error updating room availability:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+export const updateRoom = async (roomId, roomData) => {
+  try {
+    const { data, error } = await supabase
+      .from('rooms')
+      .update({
+        type: roomData.roomType,
+        price: roomData.pricePerNight,
+        max_guests: roomData.maxGuests,
+        description: roomData.description,
+        image: roomData.images && roomData.images.length > 0 ? roomData.images[0] : undefined,
+        amenities: roomData.amenities
+      })
+      .eq('id', roomId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return { success: true, data }
+  } catch (error) {
+    console.error('Error updating room:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+export const deleteRoom = async (roomId) => {
+  try {
+    const { error } = await supabase
+      .from('rooms')
+      .delete()
+      .eq('id', roomId)
+    
+    if (error) throw error
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting room:', error)
     return { success: false, error: error.message }
   }
 }
@@ -406,6 +467,8 @@ export const getOwnerDashboardData = async (ownerId) => {
 // ============ STORAGE FUNCTIONS ============
 export const uploadImage = async (file, bucket = 'room-images') => {
   try {
+    console.log('Uploading image:', { fileName: file.name, size: file.size, bucket });
+    
     const fileExt = file.name.split('.').pop()
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
     
@@ -413,13 +476,17 @@ export const uploadImage = async (file, bucket = 'room-images') => {
       .from(bucket)
       .upload(fileName, file)
     
-    if (error) throw error
+    if (error) {
+      console.error('Supabase storage upload error:', error);
+      throw error;
+    }
     
     // Get public URL
     const { data: publicData } = supabase.storage
       .from(bucket)
       .getPublicUrl(fileName)
     
+    console.log('Image uploaded successfully:', publicData.publicUrl);
     return { success: true, data: { path: fileName, url: publicData.publicUrl } }
   } catch (error) {
     console.error('Error uploading image:', error)
@@ -478,7 +545,7 @@ export const searchRooms = async (searchParams = {}) => {
     else if (searchParams.searchTerm) {
       const term = searchParams.searchTerm.toLowerCase();
       query = query.or(
-        `room_type.ilike.%${term}%,hotels.name.ilike.%${term}%,hotels.city.ilike.%${term}%,hotels.address.ilike.%${term}%`
+        `room_type.ilike.%${term}%,hotels.name.ilike.%${term}%,hotels.city.ilike.%${term}%,hotels.location.ilike.%${term}%`
       );
     }
     

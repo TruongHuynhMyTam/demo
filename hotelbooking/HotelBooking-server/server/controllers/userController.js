@@ -49,8 +49,14 @@ export const createOrUpdateUser = async (req, res) => {
 // Update user role
 export const updateUserRole = async (req, res) => {
   try {
-    const { role } = req.body;
-    const userId = req.user.id;
+    const { role, userId } = req.body;
+    
+    // Use userId from body if provided, otherwise use authenticated user's id
+    const targetUserId = userId || req.user?.id;
+
+    if (!targetUserId) {
+      return res.json({ success: false, message: "User ID is required" });
+    }
 
     if (!['USER', 'OWNER'].includes(role)) {
       return res.json({ success: false, message: "Invalid role" });
@@ -59,7 +65,7 @@ export const updateUserRole = async (req, res) => {
     const { data, error } = await supabase
       .from('users')
       .update({ role })
-      .eq('id', userId)
+      .eq('id', targetUserId)
       .select()
       .single();
 

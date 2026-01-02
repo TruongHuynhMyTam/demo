@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Title from "../../components/Title";
-import { getRoomsByHotel, getHotelsByOwner, updateRoomAvailability } from "../../services/api";
+import { getRoomsByHotel, getHotelsByOwner, updateRoomAvailability, deleteRoom } from "../../services/api";
 import { useSupabaseUser } from "../../utils/auth-clerk.jsx";
 
 export const ListRoom = () => {
@@ -98,6 +98,30 @@ export const ListRoom = () => {
     }
   };
 
+  const handleDeleteRoom = async (roomId) => {
+    if (!confirm('Are you sure you want to delete this room?')) {
+      return;
+    }
+
+    setToggleLoading(prev => ({ ...prev, [roomId]: true }));
+    
+    try {
+      const result = await deleteRoom(roomId);
+      
+      if (result.success) {
+        // Remove from local state
+        setRooms(prevRooms => prevRooms.filter(room => room.id !== roomId));
+        alert('Room deleted successfully');
+      } else {
+        alert('Failed to delete room: ' + result.error);
+      }
+    } catch (err) {
+      alert('Failed to delete room: ' + err.message);
+    } finally {
+      setToggleLoading(prev => ({ ...prev, [roomId]: false }));
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -160,9 +184,9 @@ export const ListRoom = () => {
         </div>
       )}
 
-      <div className="w-full max-w-3xl text-left border border-gray-300 rounded-lg max-h-80 overflow-y-scroll mt-3">
+      <div className="w-full max-w-full text-left border border-gray-300 rounded-lg max-h-96 overflow-y-scroll mt-3">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 sticky top-0">
             <tr>
               <th className="py-3 px-4 text-gray-800 font-medium">Room Type</th>
               <th className="py-3 px-4 text-gray-800 font-medium max-sm:hidden">
@@ -174,12 +198,15 @@ export const ListRoom = () => {
               <th className="py-3 px-4 text-gray-800 font-medium text-center">
                 Available
               </th>
+              <th className="py-3 px-4 text-gray-800 font-medium text-center">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="text-sm">
             {loading ? (
               <tr>
-                <td colSpan="4" className="py-8 text-center text-gray-500">
+                <td colSpan="5" className="py-8 text-center text-gray-500">
                   <div className="flex items-center justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
                     Loading rooms...
@@ -188,7 +215,7 @@ export const ListRoom = () => {
               </tr>
             ) : rooms.length === 0 ? (
               <tr>
-                <td colSpan="4" className="py-8 text-center text-gray-500">
+                <td colSpan="5" className="py-8 text-center text-gray-500">
                   {selectedHotel ? 'No rooms found for this hotel' : 'Select a hotel to view rooms'}
                 </td>
               </tr>
@@ -196,13 +223,13 @@ export const ListRoom = () => {
               rooms.map((item, index) => (
                 <tr key={item.id || index}>
                   <td className="py-3 px-4 text-gray-700 border-t border-gray-300">
-                    {item.room_type}
+                    {item.type || item.room_type || 'N/A'}
                   </td>
                   <td className="py-3 px-4 text-gray-700 border-t border-gray-300 max-sm:hidden">
                     {item.amenities?.join(", ") || 'No amenities'}
                   </td>
                   <td className="py-3 px-4 text-gray-700 border-t border-gray-300">
-                    ${item.price_per_night}
+                    ${item.price || item.price_per_night || 0}
                   </td>
                   <td className="py-3 px-4 border-t border-gray-300 text-center">
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -220,10 +247,20 @@ export const ListRoom = () => {
                           item.is_available ? 'translate-x-6 mt-1 ml-1' : 'translate-x-1 mt-1'
                         }`}></span>
                       </div>
-                      {toggleLoading[item.id] && (
-                        <div className="ml-2 animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                      )}
                     </label>
+                  </td>
+                  <td className="py-3 px-4 border-t border-gray-300 text-center">
+                    <button
+                      onClick={() => handleDeleteRoom(item.id)}
+                      disabled={toggleLoading[item.id]}
+                      className={`px-3 py-1 text-sm font-medium text-white rounded transition-colors ${
+                        toggleLoading[item.id]
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-red-600 hover:bg-red-700'
+                      }`}
+                    >
+                      {toggleLoading[item.id] ? 'Deleting...' : 'Delete'}
+                    </button>
                   </td>
                 </tr>
               ))

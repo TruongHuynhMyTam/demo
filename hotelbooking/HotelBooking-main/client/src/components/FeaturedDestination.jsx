@@ -38,22 +38,22 @@ const FeaturedDestination = () => {
         subTitle="Discover our handpicked selection of exceptional properties around the world, offering unparalleled luxury and unforgettable experiences."
       />
 
-      <div className="flex flex-wrap items-center justify-center gap-6 mt-20">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-gray-600">Loading featured destinations...</span>
-          </div>
-        ) : featuredRooms.length > 0 ? (
-          featuredRooms.map((room, index) => (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12 mt-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-gray-600">Loading featured destinations...</span>
+        </div>
+      ) : featuredRooms.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full mt-20">
+          {featuredRooms.map((room, index) => (
             <HotelCard key={room.id} room={room} index={index} />
-          ))
-        ) : (
-          <div className="text-center py-12">
-            <p className="text-gray-600">No featured destinations available at the moment.</p>
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 mt-20">
+          <p className="text-gray-600">No featured destinations available at the moment.</p>
+        </div>
+      )}
       <button onClick={() => {navigate('/rooms'); scrollTo(0,0)}}
       className='my-16 px-4 py-2 text-sm font-medium border border-gray-300 rounded bg-white hover:bg-gray-50 transition-all cursor-pointer'>
         View All Destinations
