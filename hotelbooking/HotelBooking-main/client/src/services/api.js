@@ -176,7 +176,21 @@ export const getRoomById = async (roomId) => {
       .from('rooms')
       .select(`
         *,
-        hotels(name, address, city)
+        hotels(
+          id,
+          name, 
+          address, 
+          city, 
+          country,
+          description,
+          image,
+          owner:users!hotels_owner_id_fkey (
+            id,
+            username,
+            email,
+            image
+          )
+        )
       `)
       .eq('id', roomId)
       .single()

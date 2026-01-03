@@ -13,7 +13,7 @@ const RoomDetails = () => {
   const [room, setRoom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [mainImage, setMainImage] = useState(null);
   
   const [checkInDate, setCheckInDate] = useState("");
   const [checkOutDate, setCheckOutDate] = useState("");
@@ -32,7 +32,12 @@ const RoomDetails = () => {
         const result = await getRoomById(id);
         
         if (result.success) {
+          console.log('Room data:', result.data);
           setRoom(result.data);
+          // Set main image to first image
+          if (result.data.images && result.data.images.length > 0) {
+            setMainImage(result.data.images[0]);
+          }
         } else {
           setError(result.error);
         }
@@ -48,13 +53,14 @@ const RoomDetails = () => {
 
   // Calculate total price
   const calculateTotalPrice = () => {
-    if (!checkInDate || !checkOutDate || !room) return 0;
+    if (!checkInDate || !checkOutDate || !room || !guests) return 0;
     
     const checkIn = new Date(checkInDate);
     const checkOut = new Date(checkOutDate);
     const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+    const pricePerNight = room.price_per_night || room.price || 0;
     
-    return nights > 0 ? nights * room.price_per_night : 0;
+    return nights > 0 ? nights * pricePerNight * guests : 0;
   };
 
   // Handle booking submission
@@ -151,10 +157,6 @@ const RoomDetails = () => {
     );
   }
 
-  const mainImage = room.images && room.images.length > 0 
-    ? room.images[selectedImageIndex] 
-    : assets.roomImg1;
-
   return (
     <div className="py-28 md:py-35 px-4 md:px-16 lg:px-24 xl:px-32">
       {/* Room Details */}
@@ -181,21 +183,21 @@ const RoomDetails = () => {
       <div className="flex flex-col lg:flex-row mt-6 gap-6">
         <div className="lg:w-1/2 w-full">
           <img
-            src={mainImage}
+            src={mainImage || assets.roomImg1}
             alt="Room Image"
             className="w-full rounded-xl shadow-lg object-cover"
           />
         </div>
         <div className="grid grid-cols-2 gap-4 lg:w-1/2 w-full">
-          {room?.images && room.images.length > 1 &&
-            room.images.map((image, index) => (
+          {room?.images && room.images.length > 0 &&
+            room.images.slice(0, 4).map((image, index) => (
               <img
                 key={index}
                 src={image}
-                alt="Room Image"
-                onClick={() => setSelectedImageIndex(index)}
-                className={`w-full rounded-xl shadow-md object-cover cursor-pointer 
-          ${selectedImageIndex === index && "outline-3 outline-orange-500"}`}
+                alt={`Room view ${index + 1}`}
+                onClick={() => setMainImage(image)}
+                className={`w-full rounded-xl shadow-md object-cover cursor-pointer transition-all hover:scale-105
+          ${mainImage === image ? "outline outline-3 outline-orange-500" : ""}`}
               />
             ))}
         </div>
@@ -220,10 +222,12 @@ const RoomDetails = () => {
         </div>
         {/* Room Price */}
         <div className="flex flex-col items-end">
-          <p className="text-2xl font-medium"> ${room.price_per_night} / night </p>
+          <p className="text-2xl font-medium"> 
+            ${room.price_per_night || room.price || 0} / night 
+          </p>
           {calculateTotalPrice() > 0 && (
             <p className="text-lg text-gray-600 mt-2">
-              Total: ${calculateTotalPrice()} for {Math.ceil((new Date(checkOutDate) - new Date(checkInDate)) / (1000 * 60 * 60 * 24))} nights
+              Total: ${calculateTotalPrice()} for {guests} guest{guests > 1 ? 's' : ''}, {Math.ceil((new Date(checkOutDate) - new Date(checkInDate)) / (1000 * 60 * 60 * 24))} night{Math.ceil((new Date(checkOutDate) - new Date(checkInDate)) / (1000 * 60 * 60 * 24)) > 1 ? 's' : ''}
             </p>
           )}
         </div>
@@ -319,36 +323,40 @@ const RoomDetails = () => {
           </div>
         ))}
       </div>
-      <div className="max-w-3x1 border-y border-gray-300 my-15 py-10 text-gray-500">
-        <p>
-          Guests will be allocated on the ground floor according to
-          availability. You get a comfortable Two bedroom apartment has a true
-          city feeling. The price quoted is for two guest, at the guest slot
-          please mark the number of guests to get the exact price for groups.
-          The Guests will be allocated ground floor according to availability.
-          You get the comfortable two bedroom apartment that has a true city
-          feeling.
-        </p>
-      </div>
+      {room.hotels?.description && (
+        <div className="max-w-3x1 border-y border-gray-300 my-15 py-10 text-gray-500">
+          <p>{room.hotels.description}</p>
+        </div>
+      )}
 
       {/* Hosted by */}
       <div className="flex flex-col items-start gap-4">
         {/* Hotel information */}
         <div className="flex gap-4">
-          <div className="h-14 w-14 md:h-18 md:w-18 rounded-full bg-blue-100 flex items-center justify-center">
-            <span className="text-xl font-bold text-blue-600">
-              {room.hotels?.name?.charAt(0) || 'H'}
-            </span>
-          </div>
+          {room.hotels?.owner?.image ? (
+            <img
+              src={room.hotels.owner.image}
+              alt="Owner"
+              className="h-14 w-14 md:h-18 md:w-18 rounded-full object-cover"
+            />
+          ) : (
+            <div className="h-14 w-14 md:h-18 md:w-18 rounded-full bg-blue-100 flex items-center justify-center">
+              <span className="text-xl font-bold text-blue-600">
+                {room.hotels?.name?.charAt(0) || 'H'}
+              </span>
+            </div>
+          )}
           <div>
             <p className="text-lg md:text-xl">Hosted by {room.hotels?.name || 'Hotel'}</p>
             <div className="flex items-center mt-1">
               <StarRating />
               <p className="ml-2">200+ reviews</p>
             </div>
-            <p className="text-sm text-gray-600 mt-1">
-              {room.hotels?.city}
-            </p>
+            {room.hotels?.city && room.hotels?.country && (
+              <p className="text-sm text-gray-600 mt-1">
+                {room.hotels.city}, {room.hotels.country}
+              </p>
+            )}
           </div>
         </div>
         <button
