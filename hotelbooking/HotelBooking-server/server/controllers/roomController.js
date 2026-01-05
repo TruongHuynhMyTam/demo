@@ -6,68 +6,54 @@ import fs from 'fs';
 
 export const createRoom = async (req, res) => {
   try {
-    const { roomType, pricePerNight, amenities } = req.body;
+    const { hotelId, roomType, pricePerNight, maxGuests, description, amenities, images: imageUrls } = req.body;
     
-    // Find hotel owned by the authenticated user
+    // Validate required fields
+    if (!hotelId || !roomType || !pricePerNight) {
+      return res.json({ success: false, message: "Missing required fields: hotelId, roomType, or pricePerNight" });
+    }
+
+    // Verify that the hotel belongs to the authenticated user
     const { data: hotel, error: hotelError } = await supabase
       .from('hotels')
-      .select('id')
+      .select('id, name')
+      .eq('id', hotelId)
       .eq('owner_id', req.auth.userId)
       .single();
 
     if (hotelError || !hotel) {
-      return res.json({ success: false, message: "No Hotel found" });
+      return res.json({ success: false, message: "Hotel not found or you don't have permission" });
     }
 
-    // Upload images to Supabase Storage
-    const uploadImages = req.files.map(async (file) => {
-      const fileExt = file.originalname.split('.').pop();
-      const fileName = `${uuidv4()}.${fileExt}`;
-      const filePath = `room-images/${fileName}`;
-
-      // Read file buffer
-      const fileBuffer = fs.readFileSync(file.path);
-
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('hotel-images')
-        .upload(filePath, fileBuffer, {
-          contentType: file.mimetype,
-          upsert: false
-        });
-
-      if (error) {
-        throw new Error(`Upload failed: ${error.message}`);
-      }
-
-      // Get public URL
-      const { data: publicData } = supabase.storage
-        .from('hotel-images')
-        .getPublicUrl(filePath);
-
-      return publicData.publicUrl;
-    });
-    
-    // Wait for all images to be uploaded
-    const images = await Promise.all(uploadImages);
+    // Parse amenities if it's a string
+    const parsedAmenities = typeof amenities === 'string' ? JSON.parse(amenities) : amenities;
+    const parsedImages = typeof imageUrls === 'string' ? JSON.parse(imageUrls) : imageUrls;
 
     const { error: roomError } = await supabase
       .from('rooms')
       .insert({
-        hotel_id: hotel.id,
+        hotel_id: hotelId,
+        name: roomType, // Use roomType as name
+        description: description || `${roomType} room at ${hotel.name}`,
+        type: roomType,
         room_type: roomType,
+        price: parseFloat(pricePerNight),
         price_per_night: parseFloat(pricePerNight),
-        amenities: JSON.parse(amenities),
-        images: images,
+        max_guests: parseInt(maxGuests) || 2,
+        image: parsedImages && parsedImages.length > 0 ? parsedImages[0] : null,
+        images: parsedImages || [],
+        amenities: parsedAmenities || [],
         is_available: true
       });
 
     if (roomError) {
+      console.error('Room creation error:', roomError);
       return res.json({ success: false, message: roomError.message });
     }
 
     res.json({ success: true, message: "Room created successfully" });
   } catch (error) {
+    console.error('Error in createRoom:', error);
     res.json({ success: false, message: error.message });
   }
 };

@@ -244,9 +244,12 @@ export const addRoom = async (roomData) => {
         name: roomData.roomType || 'Standard Room',
         description: roomData.description || '',
         type: roomData.roomType,
-        price: roomData.pricePerNight,
-        max_guests: roomData.maxGuests || 2,
+        room_type: roomData.roomType, // ADD THIS - required by database
+        price: parseFloat(roomData.pricePerNight),
+        price_per_night: parseFloat(roomData.pricePerNight), // ADD THIS - required by database
+        max_guests: parseInt(roomData.maxGuests) || 2,
         image: imageUrl,
+        images: roomData.images || [], // ADD THIS - store all images
         amenities: roomData.amenities || [],
         is_available: true
       })
