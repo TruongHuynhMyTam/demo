@@ -1,11 +1,15 @@
 // Role management utilities
 import { supabase } from '../services/api.js'
 
+const rawApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api'
+const sanitizedApiUrl = rawApiUrl.replace(/\/$/, '')
+const apiBaseUrl = sanitizedApiUrl.endsWith('/api') ? sanitizedApiUrl : `${sanitizedApiUrl}/api`
+
 // Update user role in Supabase
 export const updateUserRole = async (userId, role) => {
   try {
     // Call the API endpoint instead of directly updating Supabase
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/user/update-role`, {
+    const response = await fetch(`${apiBaseUrl}/user/update-role`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -16,7 +20,12 @@ export const updateUserRole = async (userId, role) => {
       })
     });
 
-    const result = await response.json();
+    const text = await response.text();
+    const result = text ? JSON.parse(text) : null;
+
+    if (!response.ok) {
+      throw new Error(result?.message || `Request failed with status ${response.status}`)
+    }
     
     if (!result.success) {
       throw new Error(result.message);

@@ -5,12 +5,23 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 // const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables')
+const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey)
+const rawApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api'
+const sanitizedApiUrl = rawApiUrl.replace(/\/$/, '')
+const apiBaseUrl = sanitizedApiUrl.endsWith('/api') ? sanitizedApiUrl : `${sanitizedApiUrl}/api`
+
+if (!isSupabaseConfigured) {
+  console.error(
+    'Missing Supabase environment variables. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in client/.env, then restart Vite.'
+  )
 }
 
 // Regular client for authenticated operations
-export const supabase = createClient(supabaseUrl, supabaseKey)
+// Use a safe fallback so the app can still render instead of crashing on boot.
+export const supabase = createClient(
+  isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co',
+  isSupabaseConfigured ? supabaseKey : 'placeholder-anon-key'
+)
 
 // Service client for user management operations (bypasses RLS)
 // const supabaseService = supabaseServiceKey 
@@ -41,7 +52,7 @@ export const getUserProfile = async (clerkUserId) => {
 
 export const createOrUpdateUser = async (userData) => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/user/create-or-update`, {
+    const response = await fetch(`${apiBaseUrl}/user/create-or-update`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,7 +60,13 @@ export const createOrUpdateUser = async (userData) => {
       body: JSON.stringify(userData)
     });
 
-    const result = await response.json();
+    const text = await response.text();
+    const result = text ? JSON.parse(text) : null;
+
+    if (!response.ok) {
+      return { success: false, error: result?.message || `Request failed with status ${response.status}` };
+    }
+
     return result;
   } catch (error) {
     console.error('Error creating/updating user:', error);
@@ -59,7 +76,7 @@ export const createOrUpdateUser = async (userData) => {
 
 export const updateUserRole = async (clerkUserId, newRole) => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/user/update-role`, {
+    const response = await fetch(`${apiBaseUrl}/user/update-role`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -68,7 +85,13 @@ export const updateUserRole = async (clerkUserId, newRole) => {
       body: JSON.stringify({ role: newRole })
     });
 
-    const result = await response.json();
+    const text = await response.text();
+    const result = text ? JSON.parse(text) : null;
+
+    if (!response.ok) {
+      return { success: false, error: result?.message || `Request failed with status ${response.status}` };
+    }
+
     return result;
   } catch (error) {
     console.error('Error updating user role:', error);
