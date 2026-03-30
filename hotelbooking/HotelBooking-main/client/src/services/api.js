@@ -61,10 +61,18 @@ export const createOrUpdateUser = async (userData) => {
     });
 
     const text = await response.text();
-    const result = text ? JSON.parse(text) : null;
+    let result = null;
+    try {
+      result = text ? JSON.parse(text) : null;
+    } catch {
+      result = null;
+    }
 
     if (!response.ok) {
-      return { success: false, error: result?.message || `Request failed with status ${response.status}` };
+      return {
+        success: false,
+        error: result?.message || `Request failed with status ${response.status}`
+      };
     }
 
     return result;
@@ -447,6 +455,21 @@ export const updateBookingPaymentStatus = async (bookingId, isPaid) => {
     return { success: true, data }
   } catch (error) {
     console.error('Error updating booking payment:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+export const deleteBooking = async (bookingId) => {
+  try {
+    const { error } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', bookingId)
+
+    if (error) throw error
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting booking:', error)
     return { success: false, error: error.message }
   }
 }

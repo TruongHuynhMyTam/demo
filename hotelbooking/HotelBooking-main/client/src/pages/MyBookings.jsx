@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Title from "../components/Title";
 import { assets } from "../assets/assets";
-import { getUserBookings, updateBookingPaymentStatus } from "../services/api";
+import { getUserBookings, deleteBooking } from "../services/api";
 import { useSupabaseUser } from "../utils/auth-clerk.jsx";
 
 export const MyBookings = () => {
@@ -9,7 +10,8 @@ export const MyBookings = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [paymentLoading, setPaymentLoading] = useState({});
+  const [deleteLoading, setDeleteLoading] = useState({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -41,29 +43,30 @@ export const MyBookings = () => {
     }
   }, [user, isAuthenticated, authLoading]);
 
-  const handlePayment = async (bookingId) => {
-    setPaymentLoading(prev => ({ ...prev, [bookingId]: true }));
-    
+  const handlePayment = (bookingId) => {
+    navigate(`/payment/${bookingId}`);
+  };
+
+  const handleDeleteBooking = async (bookingId) => {
+    const shouldDelete = window.confirm("Are you sure you want to delete this booking?");
+    if (!shouldDelete) return;
+
+    setDeleteLoading((prev) => ({ ...prev, [bookingId]: true }));
+
     try {
-      const result = await updateBookingPaymentStatus(bookingId, true);
-      
+      const result = await deleteBooking(bookingId);
+
       if (result.success) {
-        // Update local state
-        setBookings(prevBookings => 
-          prevBookings.map(booking => 
-            booking.id === bookingId 
-              ? { ...booking, is_paid: true }
-              : booking
-          )
+        setBookings((prevBookings) =>
+          prevBookings.filter((booking) => booking.id !== bookingId)
         );
-        alert('Payment successful!');
       } else {
-        alert('Payment failed: ' + result.error);
+        alert("Delete failed: " + result.error);
       }
     } catch (err) {
-      alert('Payment failed: ' + err.message);
+      alert("Delete failed: " + err.message);
     } finally {
-      setPaymentLoading(prev => ({ ...prev, [bookingId]: false }));
+      setDeleteLoading((prev) => ({ ...prev, [bookingId]: false }));
     }
   };
 
@@ -199,13 +202,22 @@ export const MyBookings = () => {
                 {!booking.is_paid && (
                   <button
                     onClick={() => handlePayment(booking.id)}
-                    disabled={paymentLoading[booking.id]}
                     className={`mt-4 px-4 py-1.5 text-xs border border-gray-400 rounded-full 
-                     hover:bg-gray-50 transition-all cursor-pointer ${
-                       paymentLoading[booking.id] ? 'opacity-50 cursor-not-allowed' : ''
-                     }`}
+                     hover:bg-gray-50 transition-all cursor-pointer`}
                   >
-                    {paymentLoading[booking.id] ? 'Processing...' : 'Pay Now'}
+                    Pay Now
+                  </button>
+                )}
+                {!booking.is_paid && (
+                  <button
+                    onClick={() => handleDeleteBooking(booking.id)}
+                    disabled={deleteLoading[booking.id]}
+                    className={`mt-3 px-4 py-1.5 text-xs border border-red-300 text-red-600 rounded-full
+                      hover:bg-red-50 transition-all cursor-pointer ${
+                        deleteLoading[booking.id] ? "opacity-50 cursor-not-allowed" : ""
+                      }`}
+                  >
+                    {deleteLoading[booking.id] ? "Deleting..." : "Delete"}
                   </button>
                 )}
               </div>
